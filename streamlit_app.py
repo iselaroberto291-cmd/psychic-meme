@@ -3,28 +3,30 @@ import google.generativeai as genai
 from PIL import Image
 import os
 
-# --- 1. 页面基本配置 ---
+# --- 1. 页面配置 ---
 st.set_page_config(page_title="影视硬盘助手", page_icon="🎬")
 st.title("🎬 硬盘影片信息快速识别工具")
 st.markdown("上传一张剧照，我帮你找回硬盘里的记忆。")
 
-# --- 2. 侧边栏 API 配置 ---
+# --- 2. 侧边栏配置 ---
 with st.sidebar:
     st.header("设置")
-    api_key = st.text_input("请输入 Gemini API Key", type="password", help="从 Google AI Studio 获取")
+    # 提醒：请在此处输入你在 Google AI Studio 获取的 API Key
+    api_key = st.text_input("请输入 Gemini API Key", type="password")
     if api_key:
         genai.configure(api_key=api_key)
-    st.info("提示：此工具使用 Gemini 1.5 Flash 模型进行识别。")
+    st.info("提示：图片识别由 Gemini 1.5 Flash 提供支持。")
 
-# --- 3. 核心功能区 ---
+# --- 3. 核心功能 ---
 uploaded_file = st.file_uploader("选择剧照 (JPG/PNG/WebP)...", type=["jpg", "jpeg", "png", "webp"])
 
 if uploaded_file is not None:
     try:
+        # 打开并显示图片
         image = Image.open(uploaded_file)
-        st.image(image, caption='已上传剧照', use_container_width=True)
+        st.image(image, caption='待识别剧照', use_container_width=True)
         
-        # 定义发给 AI 的指令
+        # 设定 AI 的角色和任务
         prompt = """
         你是一个专业的影视库助手。请根据这张图片识别以下内容：
         1. 识别影片内容：确认该剧照属于哪部电影或电视剧。
@@ -34,24 +36,23 @@ if uploaded_file is not None:
         请用中文回复，并保持格式清晰美观。
         """
 
-        if st.button("🚀 开始识别内容"):
+        if st.button("🚀 开始识别"):
             if not api_key:
-                st.warning("⚠️ 请先在侧边栏输入您的 API Key。")
+                st.warning("⚠️ 请先在左侧输入 API Key！")
             else:
-                with st.spinner('正在分析图片并检索数据库...'):
-                    # 调用多模态模型
+                with st.spinner('正在分析图片内容...'):
+                    # 运行 Gemini 1.5 Flash 模型
                     model = genai.GenerativeModel('gemini-1.5-flash')
                     response = model.generate_content([prompt, image])
                     
-                    st.success("✅ 识别成功！")
+                    st.success("✅ 识别完成！")
                     st.divider()
-                    
-                    # 输出 AI 生成的内容
+                    # 直接渲染 AI 返回的文本
                     st.markdown(response.text)
                     
     except Exception as e:
-        st.error(f"❌ 程序发生错误：{str(e)}")
+        st.error(f"❌ 运行出错：{str(e)}")
 
-# --- 4. 底部说明 ---
+# --- 4. 底部提示 ---
 st.divider()
-st.caption("提示：图片越清晰、人物面部特征越明显，识别的准确度越高。")
+st.caption("建议：使用包含主角面部的清晰剧照以获得最佳识别效果。")
