@@ -16,7 +16,7 @@ st.markdown("上传一张剧照，我帮你找回硬盘里的记忆。")
 with st.sidebar:
     st.header("⚙️ 设置")
     # 使用 session_state 保持 API Key 状态
-    api_key = st.text_input("请输入 Gemini API Key", type="password", key="api_key_input")
+    api_key = st.text_input("AIzaSyAFAMNURnWWJCT41oWyHW6E14Tv1XLFz9sy", type="password", key="api_key_input")
     if api_key:
         genai.configure(api_key=api_key)
     
