@@ -3,86 +3,78 @@ import google.generativeai as genai
 from PIL import Image
 import os
 
-# --- 1. 页面配置 ---
+# --- 1. 页面配置与防干扰补丁 ---
 st.set_page_config(page_title="影视硬盘助手", page_icon="🎬", layout="centered")
 
-# 注入 CSS 尝试防止翻译插件干扰
-st.markdown('<div class="notranslate">', unsafe_allow_html=True)
+# 核心：注入 JS 和 CSS 强制禁用浏览器自动翻译，防止 "removeChild" 报错
+st.markdown(
+    """
+    <script>
+        document.documentElement.setAttribute('class', 'notranslate');
+        document.documentElement.setAttribute('translate', 'no');
+    </script>
+    <style>
+        .notranslate { translate: no !important; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-st.title("🎬 硬盘影片信息快速识别工具")
-st.markdown("上传一张剧照，我帮你找回硬盘里的记忆。")
+st.title("🎬 硬盘影片信息识别工具")
+st.markdown("上传一张剧照，AI 将为你精准匹配影片信息。")
 
-# --- 2. 侧边栏配置 ---
+# --- 2. API 配置 (安全模式) ---
 with st.sidebar:
     st.header("⚙️ 设置")
-    # 使用 session_state 保持 API Key 状态
-    api_key = st.text_input("AIzaSyAFAMNURnWWJCT41oWyHW6E14Tv1XLFz9sy", type="password", key="api_key_input")
+    # 优先从 Streamlit Secrets 读取，如果没有则显示输入框
+    if 'GEMINI_API_KEY' in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        st.success("✅ 已从 Secrets 自动加载 API Key")
+    else:
+        api_key = st.text_input("请输入 Gemini API Key", type="password", help="在此输入你的 Google AI Studio 密钥")
+    
     if api_key:
         genai.configure(api_key=api_key)
     
     st.divider()
-    st.info("💡 提示：本工具使用 Gemini 1.5 Flash 模型，识别速度快且支持多模态理解。")
-    st.caption("没有 Key？请前往 [Google AI Studio](https://aistudio.google.com/) 申请。")
+    st.info("提示：图片识别由 Gemini 1.5 Flash 提供支持。")
 
-# --- 3. 核心功能 ---
-# 增加 key 确保上传组件状态稳定
-uploaded_file = st.file_uploader("选择剧照 (JPG/PNG/WebP)...", type=["jpg", "jpeg", "png", "webp"], key="movie_uploader")
+# --- 3. 核心功能逻辑 ---
+uploaded_file = st.file_uploader("点击上传或拖拽剧照...", type=["jpg", "jpeg", "png", "webp"], key="uploader")
 
-if uploaded_file is not None:
+if uploaded_file:
     try:
-        # 打开图片
         image = Image.open(uploaded_file)
+        # 居中展示预览图
+        st.image(image, caption='待识别图像', use_container_width=True)
         
-        # 使用列布局美化界面
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.image(image, caption='已上传的剧照', use_container_width=True)
-        
-        with col2:
-            st.write("🔍 **识别准备就绪**")
-            st.write("点击下方按钮开始分析。")
-            identify_btn = st.button("🚀 开始识别", key="start_ai_btn")
-
-        # 设定 AI 的角色和任务
+        # 优化后的 Prompt
         prompt = """
         你是一个专业的影视库助手。请根据这张图片识别以下内容：
-        1. 识别影片内容：确认该剧照属于哪部电影或电视剧（包括上映年份）。
-        2. 角色与演员：列出图片中出现的关键角色名称及其对应的演员姓名（格式：角色名 - 演员名）。
-        3. 视频剧情简介：总结该影片的剧情大纲（300字以内）。
+        1. **影片识别**：确认该剧照属于哪部电影或电视剧。
+        2. **角色与演员**：列出图片中出现的关键角色名称及其对应的演员姓名（格式：角色名 - 演员名）。
+        3. **核心剧情**：总结该影片的剧情大纲（300字以内）。
         
-        要求：请用中文回复，使用 Markdown 格式，让排版美观（例如使用加粗、列表）。
+        请务必用中文回复，并使用清晰的 Markdown 标题。
         """
 
-        if identify_btn:
+        if st.button("🚀 开始深度识别", type="primary", key="recognize_btn"):
             if not api_key:
-                st.warning("⚠️ 请先在左侧侧边栏输入 API Key！")
+                st.warning("⚠️ 请先配置 API Key！")
             else:
-                with st.spinner('AI 正在翻阅影视库，请稍候...'):
-                    # 运行 Gemini 1.5 Flash 模型
+                with st.spinner('🎬 AI 正在穿梭影库...'):
                     model = genai.GenerativeModel('gemini-1.5-flash')
-                    
-                    # 增加流式传输或直接获取结果
+                    # 调用模型生成内容
                     response = model.generate_content([prompt, image])
                     
-                    if response.text:
-                        st.success("✅ 识别成功！")
-                        st.divider()
-                        # 结果展示区
-                        st.markdown(response.text)
-                    else:
-                        st.error("❌ AI 未能返回有效结果，可能是由于内容安全过滤。")
-                        
+                    st.success("识别完成！")
+                    st.divider()
+                    # 渲染识别结果
+                    st.markdown(response.text)
+                    
     except Exception as e:
-        # 捕获具体的错误类型
-        error_msg = str(e)
-        if "API_KEY_INVALID" in error_msg:
-            st.error("❌ API Key 无效，请检查输入是否正确。")
-        elif "quota" in error_msg.lower():
-            st.error("❌ API 配额已耗尽，请稍后再试或更换 Key。")
-        else:
-            st.error(f"❌ 运行出错：{error_msg}")
+        st.error(f"❌ 程序遇到一点小麻烦：{str(e)}")
 
-# --- 4. 底部提示 ---
+# --- 4. 底部声明 ---
 st.divider()
-st.caption("建议：使用包含主角面部或经典场景的清晰剧照以获得最佳识别效果。")
-st.markdown('</div>', unsafe_allow_html=True) # 结束屏蔽翻译区域
+st.caption("注：本工具仅供学习和个人管理硬盘资源使用。")
